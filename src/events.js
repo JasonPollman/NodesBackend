@@ -55,8 +55,7 @@ export function broadcastChildEvent(socket, event, node) {
  * node operation, broadcast the event to all connected users, and and emit
  * the SOCKET_EVENTS.ERROR event if the handler throws.
  *
- * It also limits the interface of each partialized node operation
- * to receive only a single object (by design).
+ * It also limits the interface of each node operation to receive only a single object (by design).
  * @param {object} socket The socket connection handler associated with the handler.
  * @param {object} eventSchema Options for this given event.
  * @param {function} eventSchema.handler The event handler that will be invoked on "event".
@@ -84,7 +83,8 @@ export function prepareNodeOperation(socket, handler, event) {
 /**
  * Returns a function that can be passed to the websocket's `onSocketConnection`
  * callback, provided a NodeFactory instance. This will setup the necessary socket
- * event handlers for each of the corresponding node factory CRUD methods.
+ * event handlers for each of the corresponding node factory CRUD methods and automatically
+ * broadcast the events to all other connected clients.
  * @param {object} nodes The NodeFactory to operate against and to bind to the socket connection.
  * @returns {function} A callback for websockets.onSocketConnection.
  * @export
@@ -94,15 +94,15 @@ export default function setupWebsocketEvents(nodes) {
     // Convenience to dump the store's data for debugging purposes.
     if (NODE_ENV !== 'production') socket.on('dump', () => inspect(nodes.all()));
 
-    const eventSchema = {
+    const events = {
       [SOCKET_EVENTS.HAS_NODE]: nodes.has,
       [SOCKET_EVENTS.GET_NODE]: nodes.get,
       [SOCKET_EVENTS.SET_NODE]: nodes.set,
       [SOCKET_EVENTS.DEL_NODE]: nodes.del,
     };
 
-    _.each(eventSchema, (schema, event) => {
-      socket.on(event, prepareNodeOperation(socket, schema, event));
+    _.each(events, (handler, event) => {
+      socket.on(event, prepareNodeOperation(socket, handler, event));
     });
   };
 }

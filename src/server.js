@@ -14,7 +14,7 @@ import { DEFAULT_PORT } from './constants';
 const log = debug('node-factory:websockets');
 
 /**
- * Invokes once the default server is listening.
+ * Invoked once the default server is listening.
  * @param {object} data Data containing the server and the server's resolution method.
  * @returns {undefined}
  */

@@ -17,6 +17,12 @@ import {
 const log = debug('node-factory:store');
 const MongoConnect = Promise.promisify(MongoClient.connect, { context: MongoClient });
 
+// Cleanup child references from the database.
+// When a parent is removed, we need to remove all children.
+// We don't have to worry about socket events in this case,
+// since the parent node will be removed visually.
+const cleanupChildNodes = (collection, id) => collection.deleteManyAsync({ parent: id });
+
 /**
  * Stores a in-memory copy of the node data.
  * This will significantly reduce database calls and reduce node fetch time.
@@ -68,7 +74,8 @@ async function del(collection, id) {
 
   return collection
     .deleteOneAsync({ id })
-    .then(() => data.delete(id));
+    .then(() => data.delete(id))
+    .then(() => cleanupChildNodes(collection, id));
 }
 
 /**

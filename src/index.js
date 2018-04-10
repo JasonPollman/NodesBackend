@@ -19,7 +19,7 @@ const log = debug('node-factory:index');
  * @returns {undefined}
  */
 async function start({ dataStore, ...options } = {}) {
-  const store = dataStore || await MongoMemoryStore();
+  const store = dataStore || await MongoMemoryStore(options);
 
   return serve({
     onSocketConnection: events(NodeFactory({ store, ...options })),

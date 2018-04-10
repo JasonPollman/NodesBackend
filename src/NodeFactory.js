@@ -32,9 +32,9 @@ const NODE_VALID_FIELDS = _.keys(NODE_SCHEMA);
  * @param {*} node The node to validate.
  */
 function validateNode(node) {
-  const truncatedNode = _.pick(node, NODE_VALID_FIELDS);
-  _.each(NODE_SCHEMA, ({ check, message }, key) => assert(check(node[key], node), message));
-  return truncatedNode;
+  const picked = _.pick(node, NODE_VALID_FIELDS);
+  _.each(NODE_SCHEMA, ({ check, message }, key) => assert(check(picked[key], picked), message));
+  return picked;
 }
 
 /**
