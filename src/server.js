@@ -61,7 +61,7 @@ export function onNewSocketConnection(socket) {
  * @param {function} options.onSocketConnection Called on each new socket connection.
  * @returns {undefined}
  */
-export default async function serveWebsockets({
+export default async function serve({
   httpServer,
   onSocketConnection = _.noop,
   ...options
