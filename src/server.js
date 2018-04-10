@@ -25,7 +25,7 @@ const onServerListening = ({ server, resolve }) => () => {
 };
 
 /**
- * Creates a default server if the user doesn't supply one to index.js.
+ * Creates a default HHTP server if the user doesn't supply one to `serve`.
  * All standard HTTP requests will send back 401.
  * @returns {http.Server} An http server instance.
  * @export

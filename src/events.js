@@ -91,8 +91,7 @@ export function prepareNodeOperation(socket, handler, event) {
  */
 export default function setupWebsocketEvents(nodes) {
   return (websocket, socket) => {
-    // Convenience to dump the store's data
-    // for debugging purposes.
+    // Convenience to dump the store's data for debugging purposes.
     if (NODE_ENV !== 'production') socket.on('dump', () => inspect(nodes.all()));
 
     const eventSchema = {
