@@ -1,0 +1,23 @@
+{
+  "sourceMaps": "inline",
+  "compact": "auto",
+  "retainLines": true,
+  "presets": [
+    "stage-0",
+    [
+      "env",
+      {
+        "node": "6.0.0"
+      }
+    ]
+  ],
+  "plugins": [
+    "transform-promise-to-bluebird",
+    "transform-decorators-legacy"
+  ],
+  "env": {
+    "test": {
+      "plugins": ["istanbul"]
+    }
+  }
+}

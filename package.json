@@ -1,0 +1,70 @@
+{
+  "name": "node-factory-backend",
+  "version": "0.0.0",
+  "description": "Backend component to the `Factory Nodes` challenge.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "index.js",
+  "author": {
+    "name": "Jason James Pollman",
+    "email": "jasonjpollman@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JasonPollman/FactoryNodes.git"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test mocha ./test",
+    "test:cover": "NODE_ENV=test nyc mocha",
+    "lint": "npx eslint ./src",
+    "compile": "NODE_ENV=production npx babel ./src -d ./dist --copy-files",
+    "start": "NODE_ENV=production node ./dist",
+    "dev": "NODE_ENV=developement DEBUG=node-factory* nodemon --exec 'sleep 1 && clear && npx babel-node ./src'",
+    "interactive": "NODE_ENV=development DEBUG=node-factory* npx babel-node ./interactive"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-core": "^6.26.0",
+    "babel-plugin-istanbul": "^4.1.6",
+    "babel-plugin-transform-decorators-legacy": "^1.3.4",
+    "babel-plugin-transform-promise-to-bluebird": "^1.1.1",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-stage-0": "^6.24.1",
+    "babel-register": "^6.26.0",
+    "babel-runtime": "^6.26.0",
+    "chai": "^4.1.2",
+    "eslint": "^4.19.1",
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-plugin-import": "^2.10.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-react": "^7.7.0",
+    "minimist": "^1.2.0",
+    "mocha": "^5.0.5",
+    "nodemon": "^1.17.3",
+    "nyc": "^11.6.0",
+    "socket.io-client": "^2.1.0"
+  },
+  "nyc": {
+    "sourceMap": false,
+    "instrument": false,
+    "check-coverage": true,
+    "lines": 99,
+    "statements": 99,
+    "functions": 99,
+    "branches": 99,
+    "reporter": [
+      "lcov",
+      "text-summary"
+    ]
+  },
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "debug": "^3.1.0",
+    "express": "^4.16.3",
+    "lodash": "^4.17.5",
+    "mongodb": "^3.0.6",
+    "socket.io": "^2.1.0",
+    "uuid": "^3.2.1",
+    "uuid-regexp": "^0.3.0"
+  }
+}
