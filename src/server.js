@@ -1,46 +1,53 @@
 /**
- * Handles and manages the websocket connection.
- * @since 4/9/18
+ * Handles and manages the websocket server.
+ * @since 4/10/18
  * @file
  */
 
 import _ from 'lodash';
+import cors from 'cors';
 import http from 'http';
 import debug from 'debug';
 import io from 'socket.io';
 import express from 'express';
-import { DEFAULT_PORT } from './constants';
+
+import {
+  DEFAULT_PORT,
+  SERVE_STATIC_DIRECTORY,
+} from './constants';
 
 const log = debug('node-factory:websockets');
 
 /**
- * Invoked once the default server is listening.
- * @param {object} data Data containing the server and the server's resolution method.
- * @returns {undefined}
- */
-const onServerListening = ({ server, resolve }) => () => {
-  const { port, address } = server.address();
-  log(`Server listening @ ${address}:${port}`);
-  resolve(server);
-};
-
-/**
  * Creates a default HHTP server if the user doesn't supply one to `serve`.
- * All standard HTTP requests will send back 401.
+ * All standard HTTP requests will send back 401—except the frontend static content.
  * @returns {http.Server} An http server instance.
  * @export
  */
-export function defaultServer({ port = DEFAULT_PORT } = {}) {
-  return new Promise((resolve, reject) => {
-    const app = express();
-    const server = http.Server(app);
+export function createDefaultServer({
+  port = DEFAULT_PORT,
+  staticSourcepath = SERVE_STATIC_DIRECTORY,
+} = {}) {
+  const app = express();
+  const server = http.Server(app);
 
-    app.use((request, response) => response.status(401).send('Unauthorized'));
+  app.use(cors());
+  app.use(express.static(staticSourcepath));
+  app.use((request, response) => response.status(401).send('Unauthorized'));
 
-    server
-      .on('error', reject)
-      .on('listening', onServerListening({ server, resolve }))
-      .listen(port);
+  return Object.assign(server, {
+    start: () => new Promise((resolve, reject) => {
+      const onServerListening = () => {
+        const info = server.address();
+        log(`Server listening @ ${info.address}:${info.port}`);
+        resolve(server);
+      };
+
+      return server
+        .on('error', reject)
+        .on('listening', onServerListening)
+        .listen(port);
+    }),
   });
 }
 
@@ -64,16 +71,12 @@ export function onNewSocketConnection(socket) {
 export default async function serve({
   httpServer,
   onSocketConnection = _.noop,
-  ...options
 } = {}) {
-  const server = httpServer || await defaultServer(options);
-  const websockets = io(server);
+  if (!httpServer) {
+    throw new TypeError('Cannot serve sockets, no http server supplied');
+  }
 
+  const websockets = io(httpServer);
   websockets.on('connection', onNewSocketConnection);
   websockets.on('connection', _.partial(onSocketConnection, websockets, _));
-
-  return {
-    server,
-    websockets,
-  };
 }

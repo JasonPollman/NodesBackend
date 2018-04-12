@@ -1,13 +1,20 @@
 /**
- * Creates instances of "node operations".
- * These are agnostic of the provided store, but utliitze the store
+ * Exports a factory function that creates instances of "node operations".
+ * These are agnostic of the provided store/cache but utliitze the store/cache
  * via dependency injection. The default export provides partials bound
- * to the provided store itself.
- * @since 4/9/18
+ * to the provided store/cache.
+ *
+ * A NodeFactory instance provides the following interface:
+ * - upsertNodes,
+ * - deleteNodes,
+ * - getAllNodes,
+ * - getExpandedNodeWithId,
+ * @since 4/10/18
  * @file
  */
 
 import _ from 'lodash';
+import fp from 'lodash/fp';
 import debug from 'debug';
 import uuid from 'uuid/v4';
 import assert from 'assert';
@@ -15,140 +22,251 @@ import assert from 'assert';
 import {
   NODE_SCHEMA,
   ROOT_NODE_ID,
+  NODE_TYPE_OPTIONS,
 } from './constants';
 
 const log = debug('node-factory:operations');
 
-/**
- * The fields from a node we actually care about.
- * Any other junk passed through the socket will be ignored.
- * @type {Array<string>}
- */
-const NODE_VALID_FIELDS = _.keys(NODE_SCHEMA);
+const getNodeId = fp.get('id');
+const formatNode = fp.pick(_.keys(NODE_SCHEMA));
 
 /**
- * Validates a node by checking the required properties, per NODE_SCHEMA, and also
- * omits any extraneous node properties send over the socket we don't care about.
- * @param {*} node The node to validate.
- */
-function validateNode(node) {
-  const picked = _.pick(node, NODE_VALID_FIELDS);
-  _.each(NODE_SCHEMA, ({ check, message }, key) => assert(check(picked[key], picked), message));
-  return picked;
-}
-
-/**
- * Sets a new node.
- * @param {object} factoryOptions Options used to create this operations instance.
- * @param {object} data The node data to store in the database.
- * @returns {Promise} Resolves once the node has been created.
+ * Validates a node by checking the required properties, per NODE_SCHEMA.
+ * This also omits any extraneous node properties send over the socket we don't care about.
+ * @param {object} node The node to validate.
+ * @returns {object} The validated and formatted node.
  * @export
  */
-export async function set({ store }, {
-  id = uuid(),
-  type,
-  value,
-  parent = null,
-} = {}) {
-  const node = validateNode({
-    id,
-    type,
-    value,
-    parent,
+export function validateAndFormatNode(node) {
+  const formatted = formatNode(node);
+
+  _.each(NODE_SCHEMA, ({ check, message }, key) => {
+    assert(check(formatted[key], formatted), message);
   });
 
-  // Validate that the parent node exists (if not attaching to the root node).
-  // If the parent node doesn't exist, we cannot upsert.
-  // Use id: constants.ROOT_NODE_ID for the root node.
-  const hasParentNode = parent === ROOT_NODE_ID || await store.has(node.parent);
-  if (!hasParentNode) throw new Error("Cannot upsert node, since its parent node doesn't exist.");
-
-
-  // Only update the node if something about it has changed.
-  // This will do a deep compare on the nodes, but in our case
-  // the data store is so small this is much more efficient
-  // than making an upsert request to the DB as a noop.
-  const isExistingNode = await store.get(id);
-  const shouldUpsertNode = isExistingNode ? !_.isEqual(isExistingNode, node) : true;
-
-  if (shouldUpsertNode) {
-    await store.set(id, node);
-    log('Upserted node with id', id);
-
-    return {
-      node,
-      broadcast: true,
-    };
-  }
-
-  log(`No changes to node with id ${id}, soft aborting upsert.`);
-
-  return {
-    node,
-    broadcast: false,
-  };
+  return formatted;
 }
 
 /**
- * Deletes a new node.
- * This will soft fail if the node to delete doesn't exist.
- * @param {object} factoryOptions Options used to create this operations instance.
- * @param {object} data The node data to use to delete the node, `id` is required.
- * @returns {Promise} Resolves once the node has been deleted.
+ * Prepares a user provided node for upsertion by spreading in existing properties,
+ * validating the node and formatting it to omit useless "junk" data.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @param {object} userNode The input node from the incoming socket message.
+ * @returns {object} The validated and formatted node, ready for upsertion.
  * @export
  */
-export async function del({ store }, { id } = {}) {
-  const node = await store.get(id);
+export async function prepareNodeForUpsertion({ store, cache }, userNode) {
+  if (!_.isPlainObject(userNode)) throw new TypeError('Upsert expected an object for a node.');
 
-  if (node) {
-    await store.del(node.id);
-    log('Deleted node with id', id);
+  const existingNode = cache.get(userNode.id) || await store.getNodeWithId(userNode.id) || {};
+  const id = existingNode.id || uuid();
+
+  const node = validateAndFormatNode({
+    ...existingNode,
+    ...userNode,
+    id,
+  });
+
+  // Don't perform upsert if no updates have actually occurred.
+  if (_.isEqual(node, formatNode(existingNode))) return null;
+
+  // Validate that the parent node exists (if not attaching to the root node).
+  // If the parent node doesn't exist, we cannot upsert. Since the root node
+  // is conceptual and never added to the db, we account for that here.
+  const hasParentNode = Boolean(node.parent === ROOT_NODE_ID
+      || cache.get(node.parent)
+      || await store.getNodeWithId(node.parent),
+  );
+
+  if (!hasParentNode) {
+    throw new Error("Cannot upsert node, since its parent node doesn't exist.");
   }
 
-  return {
-    node,
-    broadcast: Boolean(node),
-  };
+  return node;
 }
 
 /**
- * Gets a node by id.
- * Deliberately made this method async, so it's the same as the rest (since it simply uses a map).
- * @param {object} factoryOptions Options used to create this operations instance.
- * @param {object} data The node data to use to fetch the node, `id` is required.
+ * Gets an array containing the node and all of its transitive children.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @param {object} userNode The input node from the incoming socket message.
+ * @returns {Promise<Array>} Resolves with an array containing
+ * the node and all of its transitive children.
+ * @export
+ */
+export async function getNodeAndTransitiveChildren({ store, cache }, userNode) {
+  const cached = cache.get(userNode.id);
+  if (cached) return [cached].concat(cached.children);
+
+  const node = await store.getNodeWithId(userNode.id);
+  if (!node) return [];
+
+  // Optimization to prevent DB calls on leaf nodes that can't have children.
+  if (NODE_TYPE_OPTIONS[node.type].isLeaf) return [node];
+
+  // Get all of the node's children and their children recursively.
+  const transitiveChildren = await Promise.map(
+    await store.getChildrenOfNodeWithId(node.id),
+    child => getNodeAndTransitiveChildren({ store, cache }, child.id),
+  );
+
+  // This returns a single array with the node first,
+  // then all children and grandchildren.
+  return [node].concat(_.flatten(transitiveChildren));
+}
+
+/**
+ * Upserts all of the given nodes to the database.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @param {Array<object>} nodesToUpsert The set of nodes received from the frontend to upsert.
+ * @returns {Promise} Resolves once all of the nodes have been created.
+ * @export
+ */
+export async function upsertNodes({ store, cache }, nodesToUpsert) {
+  if (!_.isArray(nodesToUpsert)) {
+    throw new TypeError('`upsertNodes` expected an array of nodes to upsert.');
+  }
+
+  const prepareNodes = _.partial(prepareNodeForUpsertion, { store, cache });
+  const nodes = await Promise.map(nodesToUpsert, prepareNodes).filter(_.isPlainObject);
+
+  if (!nodes.length) return [];
+  await store.upsertNodes(nodes);
+
+  // When upserting we have to delete the node from the cache and
+  // the node's parent, since we store the children in the cache.
+  _.each(nodes, (node) => {
+    cache.del(node.id);
+    cache.del(node.parent);
+  });
+
+  log(`Upserted ${nodes.length} nodes`);
+  return nodes;
+}
+
+/**
+ * Deletes all of the given nodes from the database.
+ * This will also delete all of the node's child nodes, and their child nodes,
+ * since if a child node is deleted there's no reason to keep transitive nodes.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @param {Array<object>} nodesToDelete The set of nodes received from the frontend to delete.
+ * @returns {Promise} Resolves once all of the nodes have
+ * been created with the deleted set of nodes.
+ * @export
+ */
+export async function deleteNodes({ store, cache }, nodesToDelete) {
+  if (!_.isArray(nodesToDelete)) {
+    throw new TypeError('`deleteNodes` requires an array of nodes to upsert.');
+  }
+
+  const transitiveNodes = await Promise.map(nodesToDelete,
+    _.partial(getNodeAndTransitiveChildren, { store, cache }),
+  );
+
+  const nodes = _.uniqBy(_.map(transitiveNodes, fp.first), getNodeId);
+  const nodesWithChildren = _.uniqBy(_.flatten(transitiveNodes), getNodeId);
+
+  // When deleting we have to delete the node from the cache and
+  // the node's parent, since we store the children in the cache.
+  _.each(nodesWithChildren, (node) => {
+    cache.del(node.id);
+    cache.del(node.parent);
+  });
+
+  if (!nodesWithChildren.length) return [];
+  await store.deleteNodes(nodesWithChildren);
+
+  log(`Deleted ${nodes.length} nodes, and ${nodesWithChildren.length - nodes.length} child nodes`);
+  return nodes;
+}
+
+/**
+ * Gets an expanded node by id, that is a node with its children and grandchildren, etc added in.
+ * Since this will be used to prime the node trees when the application loads, we're caching
+ * node fetches to prevent spamming the database.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @param {string} id The id of the node to delete.
  * @returns {Promise} Resolves with the node with the given id, or null if it doesn't exist.
  * @export
  */
-export async function get({ store }, { id } = {}) {
-  const node = await store.get(id) || null;
-  log('Fetched node:', node);
+export async function getExpandedNodeWithId({ store, cache }, id) {
+  if (!_.isString(id)) return null;
+  const cached = cache.get(id);
 
-  return {
-    node,
-    broadcast: false,
-  };
+  if (cached) {
+    log(`Fetched expanded node with id ${id} (cache hit)`);
+    return cached;
+  }
+
+  const node = await store.getNodeWithId(id);
+  if (!node) return null;
+
+  let children = [];
+  if (!NODE_TYPE_OPTIONS[node.type].isLeaf) {
+    // Get the expanded children and their children, etc.
+    // This will recursively get transitive children.
+    children = _.compact(await Promise.map(
+      await store.getChildrenOfNodeWithId(node.id),
+      child => getExpandedNodeWithId({ store, cache }, child.id),
+    ));
+  }
+
+  log(`Fetched expanded node with id ${id} (cache miss)`);
+  const expanded = Object.assign(node, { children });
+
+  cache.set(expanded.id, expanded);
+  return expanded;
 }
 
 /**
- * Exports all nodes.
- * @param {object} factoryOptions Options used to create this operations instance.
+ * Gets all of the store's nodes.
+ * This is purely for debugging purposes.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @returns {object} A NodeFactory "instance".
+ * @export
  */
-export function all({ store }) {
-  return store.data;
+export async function getAllNodes({ store }) {
+  return store.getAllNodes();
+}
+
+/**
+ * Gets the root node.
+ * The root node is conceptual, it doesn't exist in the database.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @returns {object} The root node and all its transitive children.
+ * @export
+ */
+export async function getExpandedRootNode(factoryOptions) {
+  const children = await factoryOptions.store
+    .getChildrenOfNodeWithId(ROOT_NODE_ID)
+    .map(child => getExpandedNodeWithId(factoryOptions, child.id));
+
+  return {
+    id: ROOT_NODE_ID,
+    type: 'root',
+    value: 'root',
+    parent: null,
+    children,
+  };
 }
 
 /**
  * Creates a new "node operations" instance, given factory options.
- * @param {object} factoryOptions Options used to create this operations instance.
- * @returns {object} Each of the get, set, and del node operations bound to "factoryOptions".
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @returns {object} Each of the exportable node operations bound to "factoryOptions".
  */
 export default function NodeFactory(factoryOptions) {
   const operations = {
-    get,
-    set,
-    del,
-    all,
+    upsertNodes,
+    deleteNodes,
+    getAllNodes,
+    getExpandedRootNode,
+    getExpandedNodeWithId,
   };
 
-  return _.mapValues(operations, action => _.partial(action, factoryOptions));
+  const nodeFactory = _.mapValues(operations, action => _.partial(action, factoryOptions));
+  const compositeAction = async actions => _.flatten(await Promise.map(actions,
+    ({ event, args }) => nodeFactory[event](...args),
+  ));
+
+  return Object.assign(nodeFactory, { compositeAction });
 }

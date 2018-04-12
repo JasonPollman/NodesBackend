@@ -1,6 +1,7 @@
 /**
  * A small interactive CLI to test backend functionality without a front-end.
  * Requires dev dependencies to be installed and run via babel-node (or transpiled).
+ * This is for debugging purposes only.
  * @since 4/9/18
  * @file
  */
@@ -8,11 +9,10 @@
 /* eslint-disable import/no-extraneous-dependencies, no-console */
 
 import _ from 'lodash';
+import util from 'util';
 import minimist from 'minimist';
 import readline from 'readline';
 import io from 'socket.io-client';
-
-import util from 'util';
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const client = io(`http://localhost:${_.get(process.env, 'PORT', 3000)}`);
@@ -39,7 +39,7 @@ function tryJsonParse(input) {
  */
 const COMMAND_MAPPING = {
   listen: ({ event }) => client.on(event, inspect),
-  emit: ({ event, data }) => client.emit(event, data),
+  emit: ({ event, data }) => console.log(data) || client.emit(event, data),
   default: ({ command }) => inspect(`No command ${command} exists.`),
 };
 

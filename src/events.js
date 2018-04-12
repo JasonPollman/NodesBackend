@@ -2,16 +2,18 @@
  * Exports a function that takes in a NodeFactory instance and returns a method that
  * can be passed to the websockets manager's `onSocketConnection` callback.
  * This binds all the socket events to the given NodeFactory instance.
- * @since 4/9/18
+ * @since 4/10/18
  * @file
  */
 
 import _ from 'lodash';
+import fp from 'lodash/fp';
 import util from 'util';
 import debug from 'debug';
 
 import {
   NODE_ENV,
+  ROOT_NODE_ID,
   SOCKET_EVENTS,
 } from './constants';
 
@@ -26,6 +28,7 @@ const inspect = value => console.log(util.inspect(value, { colors: true, depth: 
  * @param {object} socket The socket connection handler in which the error occurred.
  * @param {string} event The name of the event that failed to process.
  * @param {Error} error The error that was thrown by the incoming message handler.
+ * @returns {undefined}
  * @export
  */
 export function handleNodeEventError(socket, event, error) {
@@ -34,50 +37,63 @@ export function handleNodeEventError(socket, event, error) {
 }
 
 /**
- * Broadcasts the message from the user to the rest of the connected clients.
- * This excludes the client who was the original sender (per socket.io docs).
- * @param {object} socket The socket connection handler associated with the callback.
- * @param {string} event The name of the event that callback will be bound to.
- * @param {object} node The data to emit.
+ * Broadcasts the update message to all clients.
+ * @param {object} websockets The socket.io instance.
+ * @param {object} socket The socket connection handler.
+ * @param {object} nodes The NodeFactory instance to operate using.
+ * @param {object} results The result of the upsert/delete operation.
+ * @returns {undefined}
  */
-export function broadcastChildEvent(socket, event, node) {
-  const key = `child-of-${node.parent}-${event}`;
+export async function broadcastNodeUpdateEvent(websockets, socket, nodes, results) {
+  const parentNodeIDs = _.uniq(_.map(results, fp.get('parent')));
 
-  log(`Broadcasting Socket Event "${key}":`);
-  socket.broadcast.emit(key, node);
+  await Promise.map(parentNodeIDs, async (id) => {
+    const node = id === ROOT_NODE_ID
+      ? await nodes.getExpandedRootNode(id)
+      : await nodes.getExpandedNodeWithId(id);
 
-  log(`Broadcasting Socket Event "${event}":`, node);
-  socket.broadcast.emit(event, node);
+    const key = `${SOCKET_EVENTS.NODE_WAS_UPDATED}:${node.id}`;
+    log(`Broadcasting Update Event "${key}":`);
+    websockets.emit(key, node);
+  });
 }
 
 /**
  * Prepares an incoming socket event handler by wrapping the event handler to call the respective
- * node operation, broadcast the event to all connected users, and and emit
+ * node broadcast operation, broadcast the event to all connected users, and and emit
  * the SOCKET_EVENTS.ERROR event if the handler throws.
  *
  * It also limits the interface of each node operation to receive only a single object (by design).
- * @param {object} socket The socket connection handler associated with the handler.
- * @param {object} eventSchema Options for this given event.
- * @param {function} eventSchema.handler The event handler that will be invoked on "event".
- * @param {boolean} eventSchema.broadcast If true, the event will be
- * broadcast to all other connected clients.
+ * @param {object} nodes The NodeFactory instance to operate using.
+ * @param {object} websockets The socket.io instance.
+ * @param {object} socket The socket connection handler associated with the given socket `handler`.
+ * @param {function} handler The event handler that will be invoked on "event".
  * @param {string} event The name of the event that handler will be bound to.
  * @returns {function} The wrapped socket event handler.
  * @export
  */
-export function prepareNodeOperation(socket, handler, event) {
+export function createBroadcastHandler(nodes, websockets, socket, handler, event) {
   return (data) => {
     log(`Incoming Socket Event "${event}":`, data);
 
-    const maybeBroadcastChildEvent = ({ node, broadcast }) => (
-      broadcast ? broadcastChildEvent(socket, event, node) : _.noop
-    );
-
     return Promise.resolve()
       .then(() => handler(data))
-      .then(maybeBroadcastChildEvent)
+      .then(node => broadcastNodeUpdateEvent(websockets, socket, nodes, node))
       .catch(e => handleNodeEventError(socket, event, e));
   };
+}
+
+/**
+ * Sets up frontend initialization socket events.
+ * @param {object} socket The socket connection object.
+ * @param {object} nodes The NodeFactory instance to operate using.
+ * @returns {undefined}
+ * @export
+ */
+export function initializeSocket(socket, nodes) {
+  socket.on(SOCKET_EVENTS.INIT, async () => {
+    socket.emit(SOCKET_EVENTS.INIT, await nodes.getExpandedRootNode());
+  });
 }
 
 /**
@@ -90,19 +106,18 @@ export function prepareNodeOperation(socket, handler, event) {
  * @export
  */
 export default function setupWebsocketEvents(nodes) {
-  return (websocket, socket) => {
-    // Convenience to dump the store's data for debugging purposes.
-    if (NODE_ENV !== 'production') socket.on('dump', () => inspect(nodes.all()));
+  return (websockets, socket) => {
+    initializeSocket(socket, nodes);
 
-    const events = {
-      [SOCKET_EVENTS.HAS_NODE]: nodes.has,
-      [SOCKET_EVENTS.GET_NODE]: nodes.get,
-      [SOCKET_EVENTS.SET_NODE]: nodes.set,
-      [SOCKET_EVENTS.DEL_NODE]: nodes.del,
-    };
+    if (NODE_ENV !== 'production') {
+      // Convenience to dump the store's data for debugging purposes.
+      socket.on(SOCKET_EVENTS.DUMP, () => inspect(nodes.getAllNodes()));
+    }
 
-    _.each(events, (handler, event) => {
-      socket.on(event, prepareNodeOperation(socket, handler, event));
+    const broadcastEvents = _.pick(nodes, ['upsertNodes', 'deleteNodes', 'compositeAction']);
+
+    _.each(broadcastEvents, (handler, event) => {
+      socket.on(event, createBroadcastHandler(nodes, websockets, socket, handler, event));
     });
   };
 }
