@@ -31,6 +31,12 @@ const getNodeId = fp.get('id');
 const formatNode = fp.pick(_.keys(NODE_SCHEMA));
 
 /**
+ * @param {object} node The node to assert leafyness.
+ * @returns {boolean} True if the node is a leaf node.
+ */
+const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, false);
+
+/**
  * Attempts to get the cached node with the given id
  * and fallsback back to looking up in the store.
  * @param {object} cache The cache.
@@ -110,7 +116,7 @@ export async function getNodeAndTransitiveChildren({ store, cache }, userNode) {
   if (!node) return [];
 
   // Optimization to prevent DB calls on leaf nodes that can't have children.
-  if (NODE_TYPE_OPTIONS[node.type].isLeaf) return [node];
+  if (isLeafNode(node)) return [node];
 
   // Get all of the node's children and their children recursively.
   const transitiveChildren = await Promise.map(
@@ -229,7 +235,7 @@ export async function getExpandedNodeWithId({ store, cache }, id) {
 
   // Get the expanded children and their children, etc.
   // This will recursively get transitive children.
-  if (!NODE_TYPE_OPTIONS[node.type].isLeaf) {
+  if (!isLeafNode(node)) {
     children = _.compact(await Promise.map(
       await store.getChildrenOfNodeWithId(node.id),
       child => getExpandedNodeWithId({ store, cache }, child.id),
