@@ -42,9 +42,11 @@ export function handleNodeEventError(socket, event, error) {
  * @param {object} socket The socket connection handler.
  * @param {object} nodes The NodeFactory instance to operate using.
  * @param {object} results The result of the upsert/delete operation.
+ * @param {string} clientSummary A message that can be toasted on the frontend, this is just
+ * piped from one client to the next.
  * @returns {undefined}
  */
-export async function broadcastNodeUpdateEvent(websockets, socket, nodes, results) {
+export async function broadcastNodeUpdateEvent(websockets, socket, nodes, results, clientSummary) {
   const parentNodeIDs = _.uniq(_.map(results, fp.get('parent')));
 
   await Promise.map(parentNodeIDs, async (id) => {
@@ -54,7 +56,7 @@ export async function broadcastNodeUpdateEvent(websockets, socket, nodes, result
 
     const key = `${SOCKET_EVENTS.NODE_WAS_UPDATED}:${node.id}`;
     log(`Broadcasting Update Event "${key}":`);
-    websockets.emit(key, node);
+    websockets.emit(key, node, clientSummary);
   });
 }
 
@@ -73,12 +75,12 @@ export async function broadcastNodeUpdateEvent(websockets, socket, nodes, result
  * @export
  */
 export function createBroadcastHandler(nodes, websockets, socket, handler, event) {
-  return (data) => {
+  return (data, clientSummary) => {
     log(`Incoming Socket Event "${event}":`, data);
 
     return Promise.resolve()
       .then(() => handler(data))
-      .then(node => broadcastNodeUpdateEvent(websockets, socket, nodes, node))
+      .then(node => broadcastNodeUpdateEvent(websockets, socket, nodes, node, clientSummary))
       .catch(e => handleNodeEventError(socket, event, e));
   };
 }

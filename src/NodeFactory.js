@@ -149,7 +149,7 @@ export async function upsertNodes({ store, cache }, nodesToUpsert) {
 
   _.each(nodes, (node) => {
     // Update the direct cache for the node
-    const cached = cache.get(node) || { children: [] };
+    const cached = cache.get(node.id) || { children: [] };
     const updatedCache = { ...node, children: [...cached.children] };
     cache.set(node.id, updatedCache);
 

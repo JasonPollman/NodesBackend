@@ -54,6 +54,7 @@ async function setupNodeFactory({
  */
 async function main() {
   if (module !== require.main) return;
+  process.title = 'Node Factory';
 
   log(`NODE_ENV is ${NODE_ENV}`);
 
