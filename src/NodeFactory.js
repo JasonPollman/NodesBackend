@@ -268,8 +268,8 @@ export async function getAllNodes({ store }) {
  * @export
  */
 export async function getExpandedRootNode(factoryOptions) {
-  const children = await factoryOptions.store
-    .getChildrenOfNodeWithId(ROOT_NODE_ID)
+  const children = await Promise.resolve()
+    .then(() => factoryOptions.store.getChildrenOfNodeWithId(ROOT_NODE_ID))
     .map(child => getExpandedNodeWithId(factoryOptions, child.id));
 
   return {

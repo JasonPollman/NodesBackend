@@ -13,7 +13,8 @@
   ],
   "plugins": [
     "transform-promise-to-bluebird",
-    "transform-decorators-legacy"
+    "transform-decorators-legacy",
+    "transform-runtime"
   ],
   "env": {
     "test": {
