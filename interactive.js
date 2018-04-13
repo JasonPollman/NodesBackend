@@ -39,7 +39,7 @@ function tryJsonParse(input) {
  */
 const COMMAND_MAPPING = {
   listen: ({ event }) => client.on(event, inspect),
-  emit: ({ event, data }) => console.log(data) || client.emit(event, data),
+  emit: ({ event, data }) => client.emit(event, data),
   default: ({ command }) => inspect(`No command ${command} exists.`),
 };
 

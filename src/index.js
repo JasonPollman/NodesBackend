@@ -9,16 +9,22 @@
 import debug from 'debug';
 import LRUCache from 'lru-cache';
 
+import cors from 'cors';
+import http from 'http';
+import express from 'express';
+
 import events from './events';
 import stores from './stores';
 
 import NodeFactory from './NodeFactory';
-import serve, { createDefaultServer } from './server';
+import setupSocketServer from './websockets';
 
 import {
   NODE_ENV,
+  DEFAULT_PORT,
   DEFAULT_STORE,
   CACHE_MAX_ITEMS,
+  SERVE_STATIC_DIRECTORY,
 } from './constants';
 
 const log = debug('node-factory:index');
@@ -28,7 +34,7 @@ const log = debug('node-factory:index');
  * @param {object} options Node Factory options.
  * @returns {undefined}
  */
-async function start({
+async function setupNodeFactory({
   store: dataStore,
   cache: dataCache,
   ...options
@@ -36,7 +42,7 @@ async function start({
   const cache = dataCache || new LRUCache({ max: CACHE_MAX_ITEMS });
   const store = dataStore || await stores[DEFAULT_STORE](options);
 
-  return serve({
+  return setupSocketServer({
     onSocketConnection: events(NodeFactory({ store, cache, ...options })),
     ...options,
   });
@@ -50,14 +56,20 @@ async function main() {
   if (module !== require.main) return;
 
   log(`NODE_ENV is ${NODE_ENV}`);
-  const httpServer = createDefaultServer();
 
-  await start({ httpServer });
-  await httpServer.start();
+  const app = express();
+  const httpServer = http.Server(app);
+
+  app.use(cors());
+  app.use(express.static(SERVE_STATIC_DIRECTORY));
+  app.use((request, response) => response.status(401).send('Unauthorized'));
+
+  await setupNodeFactory({ httpServer });
+  httpServer.listen(DEFAULT_PORT);
 }
 
 main().catch(e => process.nextTick(() => { throw e; }));
 
-export default start;
+export default setupNodeFactory;
 export stores from './stores';
 export NodeFactory from './NodeFactory';

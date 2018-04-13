@@ -70,7 +70,9 @@ async function deleteNodes(collection, nodes) {
  * @export
  */
 async function getNodeWithId(collection, id) {
-  log(`Getting node with id ${id || '(empty)'}`);
+  if (!id) return null;
+
+  log(`Getting node with id ${id}`);
   return collection.findOne({ id });
 }
 
@@ -82,6 +84,8 @@ async function getNodeWithId(collection, id) {
  * @export
  */
 export async function getChildrenOfNodeWithId(collection, id) {
+  if (!id) return [];
+
   log(`Getting child nodes of node with ${id || '(empty)'}`);
   return (await collection.find({ parent: id })).toArray();
 }

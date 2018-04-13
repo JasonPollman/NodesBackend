@@ -10,19 +10,7 @@ import _ from 'lodash';
 import path from 'path';
 import generateUUIDRegExp from 'uuid-regexp';
 
-const UUIDRegExp = generateUUIDRegExp({ nil: true });
-
-const NODE_TYPES = [
-  'root',
-  'leaf',
-  'factory',
-];
-
 const NODE_TYPE_OPTIONS = {
-  leaf: {
-    isLeaf: true,
-    validate: _.isNumber,
-  },
   root: {
     isLeaf: false,
     validate: _.isString,
@@ -31,7 +19,14 @@ const NODE_TYPE_OPTIONS = {
     isLeaf: false,
     validate: _.isString,
   },
+  number: {
+    isLeaf: true,
+    validate: _.isNumber,
+  },
 };
+
+const NODE_TYPES = _.keys(NODE_TYPE_OPTIONS);
+const UUIDRegExp = generateUUIDRegExp({ nil: true });
 
 export default Object.assign(exports, _.defaults({}, process.env, {
   // The runtime environment, defaults to production

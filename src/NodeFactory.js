@@ -31,6 +31,16 @@ const getNodeId = fp.get('id');
 const formatNode = fp.pick(_.keys(NODE_SCHEMA));
 
 /**
+ * Attempts to get the cached node with the given id
+ * and fallsback back to looking up in the store.
+ * @param {object} cache The cache.
+ * @param {object} store The persistence store.
+ * @param {string} id The id of the node to get.
+ * @returns {object} The cached or fetched node if it exists.
+ */
+const getCachedNodeOrFetch = (cache, store, id) => cache.get(id) || store.getNodeWithId(id);
+
+/**
  * Validates a node by checking the required properties, per NODE_SCHEMA.
  * This also omits any extraneous node properties send over the socket we don't care about.
  * @param {object} node The node to validate.
@@ -58,7 +68,7 @@ export function validateAndFormatNode(node) {
 export async function prepareNodeForUpsertion({ store, cache }, userNode) {
   if (!_.isPlainObject(userNode)) throw new TypeError('Upsert expected an object for a node.');
 
-  const existingNode = cache.get(userNode.id) || await store.getNodeWithId(userNode.id) || {};
+  const existingNode = await getCachedNodeOrFetch(cache, store, userNode.id) || {};
   const id = existingNode.id || uuid();
 
   const node = validateAndFormatNode({
@@ -73,9 +83,8 @@ export async function prepareNodeForUpsertion({ store, cache }, userNode) {
   // Validate that the parent node exists (if not attaching to the root node).
   // If the parent node doesn't exist, we cannot upsert. Since the root node
   // is conceptual and never added to the db, we account for that here.
-  const hasParentNode = Boolean(node.parent === ROOT_NODE_ID
-      || cache.get(node.parent)
-      || await store.getNodeWithId(node.parent),
+  const hasParentNode = Boolean(
+    node.parent === ROOT_NODE_ID || await getCachedNodeOrFetch(cache, store, node.parent),
   );
 
   if (!hasParentNode) {
@@ -132,11 +141,20 @@ export async function upsertNodes({ store, cache }, nodesToUpsert) {
   if (!nodes.length) return [];
   await store.upsertNodes(nodes);
 
-  // When upserting we have to delete the node from the cache and
-  // the node's parent, since we store the children in the cache.
   _.each(nodes, (node) => {
-    cache.del(node.id);
-    cache.del(node.parent);
+    // Update the direct cache for the node
+    const cached = cache.get(node) || { children: [] };
+    const updatedCache = { ...node, children: [...cached.children] };
+    cache.set(node.id, updatedCache);
+
+    // Update the node reference in the parent's cache
+    const parentCache = cache.get(node.parent);
+    if (!parentCache) return null;
+
+    const indexOfChildNode = _.findIndex(parentCache.children, { id: node.id });
+    return indexOfChildNode !== -1
+      ? parentCache.children.splice(indexOfChildNode, 1, updatedCache)
+      : parentCache.children.push(updatedCache);
   });
 
   log(`Upserted ${nodes.length} nodes`);
@@ -165,11 +183,18 @@ export async function deleteNodes({ store, cache }, nodesToDelete) {
   const nodes = _.uniqBy(_.map(transitiveNodes, fp.first), getNodeId);
   const nodesWithChildren = _.uniqBy(_.flatten(transitiveNodes), getNodeId);
 
-  // When deleting we have to delete the node from the cache and
-  // the node's parent, since we store the children in the cache.
+  // When deleting we have to delete the node cache
+  // and remove the node from its parent's cache.
   _.each(nodesWithChildren, (node) => {
     cache.del(node.id);
-    cache.del(node.parent);
+
+    const parentCache = cache.get(node.parent);
+    if (!parentCache) return;
+
+    const indexOfChildNode = _.findIndex(parentCache.children, { id: node.id });
+    if (indexOfChildNode === -1) return;
+
+    parentCache.children.splice(indexOfChildNode, 1);
   });
 
   if (!nodesWithChildren.length) return [];
@@ -201,9 +226,10 @@ export async function getExpandedNodeWithId({ store, cache }, id) {
   if (!node) return null;
 
   let children = [];
+
+  // Get the expanded children and their children, etc.
+  // This will recursively get transitive children.
   if (!NODE_TYPE_OPTIONS[node.type].isLeaf) {
-    // Get the expanded children and their children, etc.
-    // This will recursively get transitive children.
     children = _.compact(await Promise.map(
       await store.getChildrenOfNodeWithId(node.id),
       child => getExpandedNodeWithId({ store, cache }, child.id),
