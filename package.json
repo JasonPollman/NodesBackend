@@ -18,7 +18,7 @@
     "test:cover": "NODE_ENV=test nyc mocha",
     "lint": "npx eslint ./src",
     "compile": "NODE_ENV=production npx babel ./src -d ./dist --copy-files",
-    "start": "NODE_ENV=production forever start --spinSleepTime=1000 --minUptime=3000 -m 10 -e ./stderr.log ./dist",
+    "start": "NODE_ENV=production forever start -m 10 --spinSleepTime=1000 --minUptime=3000 -e ./stderr.log ./dist",
     "dev": "NODE_ENV=developement DEBUG=node-factory* nodemon --exec 'sleep 1 && clear && npx babel-node ./src'",
     "interactive": "NODE_ENV=development DEBUG=node-factory* npx babel-node ./interactive"
   },
