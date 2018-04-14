@@ -12,6 +12,7 @@ import LRUCache from 'lru-cache';
 import cors from 'cors';
 import http from 'http';
 import express from 'express';
+import compression from 'compression';
 
 import events from './events';
 import stores from './stores';
@@ -62,6 +63,7 @@ async function main() {
   const httpServer = http.Server(app);
 
   app.use(cors());
+  app.use(compression());
   app.use(express.static(SERVE_STATIC_DIRECTORY));
   app.use((request, response) => response.status(401).send('Unauthorized'));
 
