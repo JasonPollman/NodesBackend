@@ -1,7 +1,7 @@
 /**
  * Starts the Node Factory application if started directly.
- * Otherwise it creates and exports a reuable NodeFactory
- * instance.
+ * Otherwise it creates and exports the NodeFactory library
+ * and all available data stores.
  * @since 4/10/18
  * @file
  */
@@ -49,7 +49,7 @@ async function setupNodeFactory({
 }
 
 /**
- * Only kicks off the socket servie if this file was called directly.
+ * Only kicks off the socket server if this file was called directly.
  * @returns {Promise} Resolves once the socket server is ready and listening.
  */
 async function main() {

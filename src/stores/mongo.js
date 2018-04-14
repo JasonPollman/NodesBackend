@@ -1,6 +1,6 @@
 /**
  * The MongoDB driver for node CRUD operations.
- * This interface implements "node factory store interface":
+ * This interface implements the "node factory store interface":
  * - `upsertNodes`
  * - `deleteNodes`
  * - `getNodeWithId`

@@ -38,8 +38,8 @@ const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, fals
 
 /**
  * Attempts to get the cached node with the given id
- * and fallsback back to looking up in the store.
- * @param {object} cache The cache.
+ * and fallsback to looking up the node in the store.
+ * @param {object} cache The cache instance.
  * @param {object} store The persistence store.
  * @param {string} id The id of the node to get.
  * @returns {object} The cached or fetched node if it exists.
@@ -47,8 +47,9 @@ const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, fals
 const getCachedNodeOrFetch = (cache, store, id) => cache.get(id) || store.getNodeWithId(id);
 
 /**
- * Validates a node by checking the required properties, per NODE_SCHEMA.
- * This also omits any extraneous node properties send over the socket we don't care about.
+ * Validates a node by checking the required properties per NODE_SCHEMA.
+ * This also omits any extraneous node properties sent over the socket we don't care about
+ * to prevent adding junk data to the database.
  * @param {object} node The node to validate.
  * @returns {object} The validated and formatted node.
  * @export
@@ -64,8 +65,8 @@ export function validateAndFormatNode(node) {
 }
 
 /**
- * Prepares a user provided node for upsertion by spreading in existing properties,
- * validating the node and formatting it to omit useless "junk" data.
+ * Prepares a user provided node for upsertion by spreading in
+ * existing properties, validating the node, and formatting it.
  * @param {object} factoryOptions Options used to create this NodeFactory instance.
  * @param {object} userNode The input node from the incoming socket message.
  * @returns {object} The validated and formatted node, ready for upsertion.
@@ -105,12 +106,22 @@ export async function prepareNodeForUpsertion({ store, cache }, userNode) {
  * @param {object} factoryOptions Options used to create this NodeFactory instance.
  * @param {object} userNode The input node from the incoming socket message.
  * @returns {Promise<Array>} Resolves with an array containing
- * the node and all of its transitive children.
+ * the node and all of its transitive children flattened.
  * @export
  */
 export async function getNodeAndTransitiveChildren({ store, cache }, userNode) {
   const cached = cache.get(userNode.id);
-  if (cached) return [cached].concat(cached.children);
+
+  // Recursively reate the flat transitive list from the cached node.
+  if (cached) {
+    const flattenedAncestry = [cached, ...cached.children];
+    _.each(cached.children, function walkChildren(grandchild) {
+      flattenedAncestry.push(grandchild);
+      _.each(grandchild.children, walkChildren);
+    });
+
+    return flattenedAncestry;
+  }
 
   const node = await store.getNodeWithId(userNode.id);
   if (!node) return [];
@@ -187,11 +198,11 @@ export async function deleteNodes({ store, cache }, nodesToDelete) {
   );
 
   const nodes = _.uniqBy(_.map(transitiveNodes, fp.first), getNodeId);
-  const nodesWithChildren = _.uniqBy(_.flatten(transitiveNodes), getNodeId);
+  const nodesWithAncestors = _.uniqBy(_.flatten(transitiveNodes), getNodeId);
 
   // When deleting we have to delete the node cache
   // and remove the node from its parent's cache.
-  _.each(nodesWithChildren, (node) => {
+  _.each(nodesWithAncestors, (node) => {
     cache.del(node.id);
 
     const parentCache = cache.get(node.parent);
@@ -203,10 +214,10 @@ export async function deleteNodes({ store, cache }, nodesToDelete) {
     parentCache.children.splice(indexOfChildNode, 1);
   });
 
-  if (!nodesWithChildren.length) return [];
-  await store.deleteNodes(nodesWithChildren);
+  if (!nodesWithAncestors.length) return [];
+  await store.deleteNodes(nodesWithAncestors);
 
-  log(`Deleted ${nodes.length} nodes, and ${nodesWithChildren.length - nodes.length} child nodes`);
+  log(`Deleted ${nodes.length} nodes, and ${nodesWithAncestors.length - nodes.length} child nodes`);
   return nodes;
 }
 
@@ -250,17 +261,6 @@ export async function getExpandedNodeWithId({ store, cache }, id) {
 }
 
 /**
- * Gets all of the store's nodes.
- * This is purely for debugging purposes.
- * @param {object} factoryOptions Options used to create this NodeFactory instance.
- * @returns {object} A NodeFactory "instance".
- * @export
- */
-export async function getAllNodes({ store }) {
-  return store.getAllNodes();
-}
-
-/**
  * Gets the root node.
  * The root node is conceptual, it doesn't exist in the database.
  * @param {object} factoryOptions Options used to create this NodeFactory instance.
@@ -282,6 +282,17 @@ export async function getExpandedRootNode(factoryOptions) {
 }
 
 /**
+ * Gets all of the store's nodes.
+ * This is purely for debugging purposes.
+ * @param {object} factoryOptions Options used to create this NodeFactory instance.
+ * @returns {object} A NodeFactory "instance".
+ * @export
+ */
+export async function getAllNodes({ store }) {
+  return store.getAllNodes();
+}
+
+/**
  * Creates a new "node operations" instance, given factory options.
  * @param {object} factoryOptions Options used to create this NodeFactory instance.
  * @returns {object} Each of the exportable node operations bound to "factoryOptions".
@@ -296,6 +307,10 @@ export default function NodeFactory(factoryOptions) {
   };
 
   const nodeFactory = _.mapValues(operations, action => _.partial(action, factoryOptions));
+
+  // Allows the socket user to perform multiple actions at once and perform a single broadcast.
+  // This is used when new random numbers are generated to delete nodes and upserts the new
+  // ones as a "single transaction".
   const compositeAction = async actions => _.flatten(await Promise.map(actions,
     ({ event, args }) => nodeFactory[event](...args),
   ));

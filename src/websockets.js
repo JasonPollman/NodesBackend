@@ -22,8 +22,7 @@ export function onNewSocketConnection(socket) {
 /**
  * Starts the websockets server.
  * @param {object} options Server options.
- * @param {object} options.server The http server to use. If unsupplied, one will be created.
- * @param {number} options.port The port to start the server on.
+ * @param {object} options.server The http server to use.
  * @param {function} options.onSocketConnection Called on each new socket connection.
  * @returns {undefined}
  */
