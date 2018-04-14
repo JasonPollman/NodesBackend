@@ -32,7 +32,7 @@ export default Object.assign(exports, _.defaults({}, process.env, {
   // The runtime environment, defaults to production
   NODE_ENV: 'production',
   // The default port to run the socket server on
-  DEFAULT_PORT: 3000,
+  PORT: 3000,
   // The path to server static content from
   SERVE_STATIC_DIRECTORY: path.join(__dirname, '..', '..', 'frontend', 'dist'),
   // The default store to use if the user doesn't supply one

@@ -4,4 +4,4 @@ cd ../frontend
 npm install
 npm run build
 cd ../backend
-npm start
+PORT=80 npm start

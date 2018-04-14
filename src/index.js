@@ -20,8 +20,8 @@ import NodeFactory from './NodeFactory';
 import setupSocketServer from './websockets';
 
 import {
+  PORT,
   NODE_ENV,
-  DEFAULT_PORT,
   DEFAULT_STORE,
   CACHE_MAX_ITEMS,
   SERVE_STATIC_DIRECTORY,
@@ -53,7 +53,7 @@ async function setupNodeFactory({
  * @returns {Promise} Resolves once the socket server is ready and listening.
  */
 async function main() {
-  if (module !== require.main) return;
+  if (module !== require.main) return null;
   process.title = 'Node Factory';
 
   log(`NODE_ENV is ${NODE_ENV}`);
@@ -66,7 +66,7 @@ async function main() {
   app.use((request, response) => response.status(401).send('Unauthorized'));
 
   await setupNodeFactory({ httpServer });
-  httpServer.listen(DEFAULT_PORT);
+  return httpServer.listen(PORT);
 }
 
 main().catch(e => process.nextTick(() => { throw e; }));
