@@ -66,7 +66,19 @@ async function main() {
   app.use((request, response) => response.status(401).send('Unauthorized'));
 
   await setupNodeFactory({ httpServer });
-  return httpServer.listen(PORT);
+
+  return new Promise((resolve, reject) => {
+    const onServerListening = () => {
+      log(`Server listening on ${httpServer.address().port}`);
+      log(`Serving content @ ${SERVE_STATIC_DIRECTORY}`);
+      resolve();
+    };
+
+    httpServer
+      .listen(PORT)
+      .on('error', reject)
+      .on('listening', onServerListening);
+  });
 }
 
 main().catch(e => process.nextTick(() => { throw e; }));
