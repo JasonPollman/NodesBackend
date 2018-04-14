@@ -11,23 +11,30 @@ less code, my goal was to produce an app that would be maintainable, flexible, a
 The challenge called for persisting state across multiple sessions—which means emitting events.
 So, Socket.io and Node's event driven model seemed like a natural fit for the project.
 
+For convenience, I used Express to serve the frontend content, but in a real production setting
+I would have used Apache to serve the frontend app and used the Node.js server only
+for socket events.
+
 **MongoDB**    
-Since the data we're storing isn't relational in nature, a NoSQL database was a convenient choice.
+Since the data we're storing isn't relational in nature, a NoSQL database was an easy choice.
 I chose to store the nodes in a single collection and generate relationships by keeping track of each
 node's parent.
 
 ## Considerations
-*What if the database requirements changed suddenly?*    
+**What if the database requirements changed suddenly?**    
 I implemented a "store" interface that requires 5 methods. With this design,
 if and when the next greatest database hits the market, creating a new store driver would
 be quick and easy.
 
-*What if a new requirement requires the "number" (leaf) nodes to have children?*    
-I wanted to design the project so that *any* node can have children. So, all tree generation is
+**What if a new requirement requires the "number" (leaf) nodes to have children?**    
+I wanted to design the project so that *any* node could have children. So, all tree generation is
 recursive. Accounting for only "root", "factory", and "number" nodes without thinking about the
 future would mean major refactoring down the road.
 
-*What if we wanted to allow users to insert a 1,000 or more number nodes... not just 15?*    
+Additionally, all `NODE_SCHEMA` is stored in `constants.js`, so adding validations for new
+nodes means you don't have to touch any business logic.
+
+**What if we wanted to allow users to insert a 1,000 or more number nodes... not just 15?**    
 Given the tree structure and how expensive database calls are, inserting a large number of nodes
 would kill performance. *Enter cache...*
 
@@ -35,7 +42,8 @@ With caching, I was able to drop the time to insert 1,000 nodes from about 5 sec
 to the fact that we have to sanitize a node before we update it, which means fetching the missing
 data before upsertion).
 
-Additionally, when the tree comes back from the server on the first payload, all nodes are
+Additionally, it alleviates almost all database "fetch" calls.
+When the tree comes back from the server on the first payload, all nodes are
 immediately cached. Hundreds of users can connect and only a one-time set of O(n) calls are made
 to the database (for initialization). This means simultaneous connections won't flood the database. 
 
@@ -59,10 +67,12 @@ From the frontend, I was able to insert over 5,000 nodes in about 4 seconds (loc
   Defaults are provided for the cache and store if none are supplied.
 - A `NodeFactory` instance is created using the given cache and store, creating functions
   bound to the cache and store.
-  This instance will perform all of the tree node CRUD operations.
+  This instance will perform all of the tree node CRUD operations via the store and
+  house all logic around sanitization and keeping track cache.
 - This is passed to the `events.js` export, which creates a function that uses
   the provided `NodeFactory` instance in response to socket events.
-- This function is passed to `websockets.js` which invokes it with the socket.io instance.
+- This function is passed to `websockets.js` which invokes it with the socket.io instance,
+  therefore setting up all socket events.
 - The user can then start their http server.
 
 ## Interfaces
