@@ -8,13 +8,12 @@ import _ from 'lodash';
 import debug from 'debug';
 import io from 'socket.io';
 import { EventEmitter } from 'events';
+import { NODE_ENV } from './constants';
 
 const log = debug('node-factory:websockets');
 
 /* istanbul ignore next */
-const makeSockets = process.env.NODE_ENV === 'test'
-  ? () => new EventEmitter()
-  : io;
+const makeSockets = NODE_ENV === 'test' ? () => new EventEmitter() : io;
 
 /**
  * Called when a new socket connects.

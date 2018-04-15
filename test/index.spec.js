@@ -26,5 +26,23 @@ describe('Main Export', () => {
       const results = await setup({ httpServer, store: memoryStore });
       expect(results).to.be.an('object');
     });
+
+    it('Should return a NodeFactory instance (defaulting store)', async () => {
+      const app = express();
+      const httpServer = http.Server(app);
+      const results = await setup({ httpServer });
+      expect(results).to.be.an('object');
+    });
+
+    it('Should return a NodeFactory instance (no options)', async () => {
+      try {
+        await setup();
+      } catch (e) {
+        expect(e.message).to.equal('Cannot serve sockets, no http server supplied');
+        return;
+      }
+
+      throw new Error('Expected test to throw...');
+    });
   });
 });

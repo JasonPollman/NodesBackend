@@ -15,12 +15,20 @@ import debug from 'debug';
 import { MongoClient } from 'mongodb';
 
 import {
+  NODE_ENV,
   DEFAULT_DB_URL,
   DEFAULT_DB_NAME,
   DEFAULT_DB_COLLECTION,
 } from '../constants';
 
 const log = debug('node-factory:mongo');
+
+const MockClient = {
+  connect: () => ({ db: () => ({ collection: _.noop }) }),
+};
+
+/* istanbul ignore next */
+const Client = NODE_ENV !== 'test' ? MongoClient : MockClient;
 
 /**
  * Upserts the given nodes to the database.
@@ -29,7 +37,7 @@ const log = debug('node-factory:mongo');
  * @returns {Promise} Resolves once all nodes are written to the database.
  * @export
  */
-async function upsertNodes(collection, nodes) {
+export function upsertNodes(collection, nodes) {
   log(`Upserting ${nodes.length} nodes`);
 
   const inserts = _.map(nodes, node => ({
@@ -50,7 +58,7 @@ async function upsertNodes(collection, nodes) {
  * @returns {Promise} Resolves once all nodes are written to the database.
  * @export
  */
-async function deleteNodes(collection, nodes) {
+export function deleteNodes(collection, nodes) {
   log(`Deleting ${nodes.length} nodes`);
 
   const inserts = _.map(nodes, node => ({
@@ -69,7 +77,7 @@ async function deleteNodes(collection, nodes) {
  * @returns {Promise<object>} Resolves with the node data from the database, or null.
  * @export
  */
-async function getNodeWithId(collection, id) {
+export function getNodeWithId(collection, id) {
   if (!id) return null;
 
   log(`Getting node with id ${id}`);
@@ -86,7 +94,7 @@ async function getNodeWithId(collection, id) {
 export async function getChildrenOfNodeWithId(collection, id) {
   if (!id) return [];
 
-  log(`Getting child nodes of node with id ${id || '(empty)'}`);
+  log(`Getting child nodes of node with id ${id}`);
   return (await collection.find({ parent: id })).toArray();
 }
 
@@ -99,7 +107,7 @@ export async function getChildrenOfNodeWithId(collection, id) {
  */
 export async function getAllNodes(collection) {
   log('Getting all nodes');
-  return collection.find();
+  return (await collection.find()).toArray();
 }
 
 /**
@@ -112,7 +120,7 @@ export default async function createStore({
   url = DEFAULT_DB_URL,
   collection = DEFAULT_DB_COLLECTION,
 } = {}) {
-  const client = await MongoClient.connect(url);
+  const client = await Client.connect(url);
 
   const methods = {
     getAllNodes,

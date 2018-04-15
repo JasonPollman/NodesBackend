@@ -385,6 +385,21 @@ describe('NodeFactory', () => {
       ]);
     });
 
+    it('Should return the node and all it\'s transitive children as a flat array (node doesn\'t exist)', async () => {
+      const id = uuid();
+
+      const node = {
+        id,
+        type: 'factory',
+        parent: ROOT_NODE_ID,
+        value: 'node',
+        children: [],
+      };
+
+      const results = await getNodeAndTransitiveChildren({ store: memoryStore, cache }, node);
+      expect(results).to.eql([]);
+    });
+
     it('Should return the node and all it\'s transitive children as a flat array (not cached)', async () => {
       const id = uuid();
       const childID = uuid();
