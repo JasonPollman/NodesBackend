@@ -86,7 +86,7 @@ async function getNodeWithId(collection, id) {
 export async function getChildrenOfNodeWithId(collection, id) {
   if (!id) return [];
 
-  log(`Getting child nodes of node with ${id || '(empty)'}`);
+  log(`Getting child nodes of node with id ${id || '(empty)'}`);
   return (await collection.find({ parent: id })).toArray();
 }
 
