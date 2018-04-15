@@ -80,7 +80,7 @@ export function createBroadcastHandler(nodes, websockets, socket, handler, event
 
     return Promise.resolve()
       .then(() => handler(data))
-      .then(node => broadcastNodeUpdateEvent(websockets, socket, nodes, node, clientSummary))
+      .then(results => broadcastNodeUpdateEvent(websockets, socket, nodes, results, clientSummary))
       .catch(e => handleNodeEventError(socket, event, e));
   };
 }
@@ -111,6 +111,7 @@ export default function setupWebsocketEvents(nodes) {
   return (websockets, socket) => {
     initializeSocket(socket, nodes);
 
+    /* istanbul ignore else: env is never production during testing */
     if (NODE_ENV !== 'production') {
       // Convenience to dump the store's data for debugging purposes.
       socket.on(SOCKET_EVENTS.DUMP, () => inspect(nodes.getAllNodes()));

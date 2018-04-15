@@ -24,7 +24,7 @@ describe('Main Export', () => {
       const app = express();
       const httpServer = http.Server(app);
       const results = await setup({ httpServer, store: memoryStore });
-      expect(results.eio).to.be.an('object');
+      expect(results).to.be.an('object');
     });
   });
 });

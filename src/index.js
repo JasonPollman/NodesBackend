@@ -53,7 +53,7 @@ async function setupNodeFactory({
  * Only kicks off the socket server if this file was called directly.
  * @returns {Promise} Resolves once the socket server is ready and listening.
  */
-async function main() {
+async function main() /* istanbul ignore next */ {
   if (module !== require.main) return null;
   process.title = 'Node Factory';
 
@@ -83,6 +83,7 @@ async function main() {
   });
 }
 
+/* istanbul ignore next */
 main().catch(e => process.nextTick(() => { throw e; }));
 
 export default setupNodeFactory;
