@@ -77,8 +77,8 @@ export default Object.assign(exports, _.defaults({}, process.env, {
       message: `Node "type" property must be one of [${NODE_TYPES.join(', ')}].`,
     },
     parent: {
-      check: _.isString,
-      message: 'Node "parent" property must be a string.',
+      check: id => UUIDRegExp.test(id),
+      message: 'Node "parent" property must be a valid v4 UUID.',
     },
     value: {
       check: (value, node) => _.get(NODE_TYPE_OPTIONS, `${node.type}.validate`, _.stubFalse)(value),

@@ -37,4 +37,5 @@ export default function serve({
   const websockets = io(httpServer);
   websockets.on('connection', onNewSocketConnection);
   websockets.on('connection', _.partial(onSocketConnection, websockets, _));
+  return websockets;
 }

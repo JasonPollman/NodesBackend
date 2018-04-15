@@ -34,7 +34,7 @@ const formatNode = fp.pick(_.keys(NODE_SCHEMA));
  * @param {object} node The node to assert leafyness.
  * @returns {boolean} True if the node is a leaf node.
  */
-const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, false);
+export const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, false);
 
 /**
  * Attempts to get the cached node with the given id
@@ -44,7 +44,7 @@ const isLeafNode = ({ type }) => _.get(NODE_TYPE_OPTIONS, `${type}.isLeaf`, fals
  * @param {string} id The id of the node to get.
  * @returns {object} The cached or fetched node if it exists.
  */
-const getCachedNodeOrFetch = (cache, store, id) => cache.get(id) || store.getNodeWithId(id);
+export const getCachedNodeOrFetch = (cache, store, id) => cache.get(id) || store.getNodeWithId(id);
 
 /**
  * Validates a node by checking the required properties per NODE_SCHEMA.
@@ -114,7 +114,7 @@ export async function getNodeAndTransitiveChildren({ store, cache }, userNode) {
 
   // Recursively reate the flat transitive list from the cached node.
   if (cached) {
-    const flattenedAncestry = [cached, ...cached.children];
+    const flattenedAncestry = [cached];
     _.each(cached.children, function walkChildren(grandchild) {
       flattenedAncestry.push(grandchild);
       _.each(grandchild.children, walkChildren);
@@ -132,7 +132,7 @@ export async function getNodeAndTransitiveChildren({ store, cache }, userNode) {
   // Get all of the node's children and their children recursively.
   const transitiveChildren = await Promise.map(
     await store.getChildrenOfNodeWithId(node.id),
-    child => getNodeAndTransitiveChildren({ store, cache }, child.id),
+    child => getNodeAndTransitiveChildren({ store, cache }, child),
   );
 
   // This returns a single array with the node first,

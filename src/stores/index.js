@@ -5,4 +5,5 @@
  */
 
 export mongo from './mongo';
+export memory from './memory';
 export default exports;
